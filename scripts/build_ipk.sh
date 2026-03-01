@@ -88,7 +88,7 @@ Version: ${PKG_VERSION}-${PKG_RELEASE}
 Depends: luci-compat, luci-base, curl, openssl-util
 Source: https://github.com/10000ge10000/luci-app-openclaw
 SourceName: ${PKG_NAME}
-License: MIT
+License: GPL-3.0
 Section: luci
 SourceDateEpoch: $(date +%s)
 Maintainer: 10000ge10000 <10000ge10000@users.noreply.github.com>

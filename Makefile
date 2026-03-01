@@ -10,7 +10,7 @@ PKG_VERSION:=1.0.0
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=10000ge10000 <10000ge10000@users.noreply.github.com>
-PKG_LICENSE:=MIT
+PKG_LICENSE:=GPL-3.0
 
 LUCI_TITLE:=OpenClaw AI 网关 LuCI 管理插件
 LUCI_DEPENDS:=+luci-compat +luci-base +curl +openssl-util
