@@ -146,6 +146,9 @@ fi
 	# 同步 UCI 到 JSON
 	sync_uci_to_json
 
+	# 修复数据目录权限 (防止 root 用户操作后留下无法读取的文件)
+	chown -R openclaw:openclaw "$OC_DATA" 2>/dev/null || true
+
 	# Patch iframe 安全头，允许 LuCI 嵌入
 	patch_iframe_headers
 
