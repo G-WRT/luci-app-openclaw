@@ -4,6 +4,34 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## [1.0.3] - 2026-03-05
+
+### 修复
+- **P0** 配置管理写入错误的 JSON 路径导致 Gateway 崩溃且无法恢复 (#1)
+  - `json_set models.openai.apiKey` 在 `openclaw.json` 创建了非法的顶层 `models` 键
+  - OpenClaw 2026.3.1 严格校验配置 schema，拒绝启动并报 `Unknown config keys: models.openai`
+  - 修复: API Key 改写入 `auth-profiles.json`，模型注册到 `agents.defaults.models`
+  - 影响: 所有 11 个供应商的快速配置 (OpenAI/Anthropic/Gemini/OpenRouter/DeepSeek/GitHub Copilot/Qwen/xAI/Groq/SiliconFlow/自定义)
+- **P0** 恢复默认配置 → "清除模型配置" 未清理 `auth-profiles.json` 认证信息
+- **P1** 健康检查新增自动修复: 检测并移除旧版错误写入的顶层 `models` 无效键
+- **P1** `set_active_model` 手动切换模型时未注册到 `agents.defaults.models`
+
+### 新增
+- **Ollama 本地模型支持**: 快速配置菜单新增 Ollama 选项 (12)，支持 localhost/局域网连接、自动检测连通性、自动列出已安装模型、兼容 OpenAI chat completions 格式
+- `openclaw-env factory-reset` 非交互式恢复出厂设置命令
+- `auth_set_apikey` 函数: 正确写入 API Key 到 `auth-profiles.json`
+- `register_and_set_model` 函数: 注册模型到 `agents.defaults.models` 并设为默认
+- `register_custom_provider` 函数: 为需要 `baseUrl` 的 OpenAI 兼容供应商注册 `models.providers`
+- 「检测升级」同时检查 OpenClaw 和**插件版本** (通过 GitHub API 获取最新 release)
+- 页面加载时自动静默检查更新，有新版本时「检测升级」按钮显示橙色小红点提醒
+- 状态面板显示当前安装的插件版本号
+- 构建/安装流程部署 `VERSION` 文件到 `/usr/share/openclaw/VERSION`
+- `openclaw-env setup` 安装环境时自动安装 Gemini CLI (Google OAuth 依赖)
+
+### 改进
+- 使用指南顺序调整: ② 配置管理 → ③ Web 控制台 (首次使用更合理的引导顺序)
+- Gemini CLI 安装从配置向导选项 1 移至环境安装阶段，避免进入向导时临时等待
+
 ## [1.0.2] - 2026-03-02
 
 ### 修复
