@@ -2,40 +2,56 @@ name: Build Node.js ARM64 musl
 
 on:
   workflow_dispatch:
+    inputs:
+      build_v1:
+        description: 'Build V1 (22.15.1) - Legacy compatibility'
+        required: false
+        default: true
+        type: boolean
+      build_v2:
+        description: 'Build V2 (22.16.0) - Current version'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
-  build:
-    name: Build Node.js ARM64 musl
+  # ── V1 构建: 使用 Alpine apk 模式 (22.15.1) ──
+  build-v1:
+    name: Build Node.js V1 (Legacy)
+    if: ${{ inputs.build_v1 }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      artifact_name: ${{ steps.build_info.outputs.artifact_name }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Extract Node.js version from source
-        id: node_ver
-        run: |
-          NODE_VER=$(grep -oP 'NODE_VERSION="\$\{NODE_VERSION:-\K[0-9.]+' root/usr/bin/openclaw-env)
-          echo "version=${NODE_VER}" >> "$GITHUB_OUTPUT"
-          echo "Node.js version from openclaw-env: v${NODE_VER}"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
           platforms: linux/arm64
 
-      - name: Build Node.js ARM64 musl portable
+      - name: Build Node.js V1 ARM64 musl (apk mode)
         run: |
-          NODE_VER="${{ steps.node_ver.outputs.version }}"
+          NODE_VER="22.15.1"
           mkdir -p dist
-          echo "=== Building Node.js v${NODE_VER} ARM64 musl portable tarball ==="
+          echo "=== Building Node.js v${NODE_VER} ARM64 musl (apk mode) ==="
           docker run --rm --platform linux/arm64 \
             -v "$PWD/dist:/output" \
             -v "$PWD/scripts/build-node-musl.sh:/build-node-musl.sh:ro" \
             -e "NODE_VER=${NODE_VER}" \
+            -e "BUILD_MODE=apk" \
             alpine:3.21 sh /build-node-musl.sh
+
+      - name: Build info
+        id: build_info
+        run: |
+          ARTIFACT_NAME=$(ls dist/*.tar.xz | head -1 | xargs basename)
+          echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
+          echo "Artifact: ${ARTIFACT_NAME}"
 
       - name: Verify tarball
         run: |
@@ -48,8 +64,89 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: node-arm64-musl
+          name: node-arm64-musl-v1
           path: dist/*.tar.xz
+
+  # ── V2 构建: 使用交叉编译模式 (22.16.0) ──
+  build-v2:
+    name: Build Node.js V2 (Current)
+    if: ${{ inputs.build_v2 }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      artifact_name: ${{ steps.build_info.outputs.artifact_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/arm64
+
+      - name: Build Node.js V2 ARM64 musl (cross mode)
+        run: |
+          NODE_VER="22.16.0"
+          mkdir -p dist
+          echo "=== Building Node.js v${NODE_VER} ARM64 musl (cross mode) ==="
+          docker run --rm --platform linux/arm64 \
+            -v "$PWD/dist:/output" \
+            -v "$PWD/scripts/build-node-musl.sh:/build-node-musl.sh:ro" \
+            -e "NODE_VER=${NODE_VER}" \
+            -e "BUILD_MODE=cross" \
+            alpine:3.21 sh /build-node-musl.sh
+
+      - name: Build info
+        id: build_info
+        run: |
+          ARTIFACT_NAME=$(ls dist/*.tar.xz | head -1 | xargs basename)
+          echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
+          echo "Artifact: ${ARTIFACT_NAME}"
+
+      - name: Verify tarball
+        run: |
+          echo "=== Output files ==="
+          ls -lh dist/
+          echo ""
+          echo "=== Tarball contents (first 20 entries) ==="
+          tar tJf dist/*.tar.xz | head -20
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-arm64-musl-v2
+          path: dist/*.tar.xz
+
+  # ── 发布到 GitHub Release ──
+  release:
+    name: Create/Update Release
+    needs: [build-v1, build-v2]
+    if: always() && (needs.build-v1.result == 'success' || needs.build-v2.result == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download V1 artifact
+        if: ${{ needs.build-v1.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: node-arm64-musl-v1
+          path: dist/
+
+      - name: Download V2 artifact
+        if: ${{ needs.build-v2.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: node-arm64-musl-v2
+          path: dist/
+
+      - name: List all artifacts
+        run: |
+          echo "=== All artifacts ==="
+          ls -lh dist/
 
       - name: Create/Update Release
         uses: softprops/action-gh-release@v2
@@ -66,7 +163,16 @@ jobs:
             Node.js 官方 [unofficial-builds](https://unofficial-builds.nodejs.org/) 仅提供 x64 musl 构建，不提供 ARM64 musl。
             此 Release 使用 Alpine Linux ARM64 (musl libc) 环境打包。
 
-            **注意**: 文件名中的版本号为 Alpine `apk add nodejs` 实际安装的版本，
-            构建时自动从 `openclaw-env` 读取。
+            ## 版本说明
 
-            `openclaw-env setup` 会在 ARM64 musl 设备上自动从此处下载。
+            | 文件 | 版本 | 用途 |
+            |------|------|------|
+            | `node-v22.16.0-linux-arm64-musl.tar.xz` | V2 (当前) | OpenClaw v2026.3.11+ (要求 >= 22.16.0) |
+            | `node-v22.15.1-linux-arm64-musl.tar.xz` | V1 (旧版) | OpenClaw v2026.3.8 及更早版本 |
+
+            ## 构建模式
+
+            - **V2 (22.16.0)**: 交叉编译模式，从 Node.js 官方 glibc 版本转换为 musl
+            - **V1 (22.15.1)**: Alpine apk 模式，使用 Alpine 仓库的 Node.js
+
+            `openclaw-env setup` 会在 ARM64 musl 设备上自动从此处下载合适的版本。
