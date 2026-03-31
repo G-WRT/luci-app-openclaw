@@ -24,3 +24,6 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/
+
+# Internal notes (not for release)
+docs/notes/
