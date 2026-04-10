@@ -388,6 +388,22 @@ fs.writeFileSync(f, JSON.stringify(d, null, 2));
 	}
 	_ensure_critical_config
 
+		# v2026.4.10: 最终权限修复 - 确保 Gateway 启动前所有数据目录权限正确
+		# doctor --fix 或 _ensure_critical_config 可能创建新的目录/文件
+		# 关键: agents 目录下的 agent 子目录必须可被 openclaw 用户写入
+		find "${OC_STATE_DIR}" -user root -type d -exec chown openclaw:openclaw {} \; 2>/dev/null || true
+		find "${OC_STATE_DIR}" -user root -type f -exec chown openclaw:openclaw {} \; 2>/dev/null || true
+		# 特别确保 agents/main/agent 目录权限 (模型配置写入目录)
+		local agent_dir="${OC_STATE_DIR}/agents/main/agent"
+		if [ -d "$agent_dir" ]; then
+			chown openclaw:openclaw "$agent_dir" 2>/dev/null || true
+			chmod 755 "$agent_dir" 2>/dev/null || true
+		fi
+		# extensions 目录除外 - 必须保持 root 权限 (OpenClaw 安全要求)
+		if [ -d "${OC_STATE_DIR}/extensions" ]; then
+			chown -R root:root "${OC_STATE_DIR}/extensions" 2>/dev/null || true
+		fi
+
 	# Patch iframe 安全头，允许 LuCI 嵌入
 	patch_iframe_headers
 
